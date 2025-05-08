@@ -139,13 +139,12 @@ class Zone(ControllerBase):
 
             # If there is a fault or a window is open, we disable PID
             self._recalculate_regulator_enabled()
-            if self._regulator.enabled:
-                # The temp sensor can be temporarily offline, but we give it a chance to recover without pausing PID.
-                if cur_temp is None:
-                    return
 
+            # The temp sensor can be temporarily offline, but we give it a chance to recover without pausing PID.
+            if cur_temp:
                 self.climate_entity.set_current_temperature(cur_temp)
-                self._regulator.calculate_output(cur_temp)
+                if self._regulator.enabled:
+                    self._regulator.calculate_output(cur_temp)
 
             output = self._regulator.output
             self.output_entity.set_native_value(output)
