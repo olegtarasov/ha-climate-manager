@@ -1,79 +1,79 @@
 {
-  "config": {
-    "flow_title": "Climate Manager",
-    "step": {
-      "user": {
-        "title": "Thermostat name",
-        "description": "Choose a name for the main thermostat",
-        "data": {
-          "main_thermostat_name": "Main thermostat name"
-        }
-      },
-      "menu": {
-        "title": "Configuration",
-        "menu_options": {
-          "heating_zones": "Heating zones",
-          "heating_circuits": "Heating circuits",
-          "finish": "Finish setup"
-        }
-      }
-    },
-    "options": {
-      "step": {
-        "init": {
-          "title": "Multizone Heating Options",
-          "description": "Modify component settings",
-          "data": {
-            "name": "Name"
-          }
-        }
-      }
-    }
-  },
-  "config_subentries": {
-    "zone": {
-      "flow_title": "Heating zone",
-      "initiate_flow": {
-        "user": "Heating zone"
-      },
-      "step": {
-        "user": {
-          "title": "Heating zone",
-          "data": {
-            "zone_name": "Zone name"
-          }
+    "config": {
+        "flow_title": "Climate Manager",
+        "options": {
+            "step": {
+                "init": {
+                    "data": {
+                        "name": "Name"
+                    },
+                    "description": "Modify component settings",
+                    "title": "Multizone Heating Options"
+                }
+            }
         },
-        "entities": {
-          "title": "Entities",
-          "data": {
-            "regulator_type": "Regulator type",
-            "temperature_sensor": "Temperature sensor",
-            "window_sensors": "Window sensors",
-            "trvs": "TRVs"
-          }
+        "step": {
+            "menu": {
+                "menu_options": {
+                    "finish": "Finish setup",
+                    "heating_circuits": "Heating circuits",
+                    "heating_zones": "Heating zones"
+                },
+                "title": "Configuration"
+            },
+            "user": {
+                "data": {
+                    "main_thermostat_name": "Main thermostat name"
+                },
+                "description": "Choose a name for the main thermostat",
+                "title": "Thermostat name"
+            }
         }
-      }
     },
-    "circuit": {
-      "flow_title": "Heating circuit",
-      "initiate_flow": {
-        "user": "Heating circuit"
-      },
-      "step": {
-        "user": {
-          "title": "Heating circuit",
-          "data": {
-            "circuit_name": "Circuit name"
-          }
+    "config_subentries": {
+        "circuit": {
+            "flow_title": "Heating circuit",
+            "initiate_flow": {
+                "user": "Heating circuit"
+            },
+            "step": {
+                "entities": {
+                    "data": {
+                        "switches": "Switches",
+                        "zones": "Heating zones"
+                    },
+                    "title": "Entities"
+                },
+                "user": {
+                    "data": {
+                        "circuit_name": "Circuit name"
+                    },
+                    "title": "Heating circuit"
+                }
+            }
         },
-        "entities": {
-          "title": "Entities",
-          "data": {
-            "zones": "Heating zones",
-            "switches": "Switches"
-          }
+        "zone": {
+            "flow_title": "Heating zone",
+            "initiate_flow": {
+                "user": "Heating zone"
+            },
+            "step": {
+                "entities": {
+                    "data": {
+                        "regulator_type": "Regulator type",
+                        "temperature_sensor": "Temperature sensor",
+                        "trvs": "TRVs",
+                        "window_sensors": "Window sensors"
+                    },
+                    "title": "Entities"
+                },
+                "user": {
+                    "data": {
+                        "zone_name": "Zone name"
+                    },
+                    "title": "Heating zone"
+                }
+            }
         }
-      }
     }
-  }
 }

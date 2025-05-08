@@ -30,7 +30,7 @@ It is ideal for hydronic or electric floor heating, radiator systems driven by a
 ### 1. HACS (recommended)
 
 1. Open **HACS › Integrations › ··· › Custom repositories** and add
-   `https://github.com/<your-username>/<repo>` as *Integration*.
+   `https://github.com/olegtarasov/ha-climate-manager` as *Integration*.
 2. Find **Climate Manager** in the list, click **Download**.
 3. **Restart Home Assistant** to load the new integration.
 
