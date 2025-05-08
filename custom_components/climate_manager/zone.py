@@ -84,6 +84,9 @@ class Zone(ControllerBase):
             if self._trvs
             else None
         )
+        self.regulator_active_entity = self.entity_bag.add_binary_sensor(
+            ZoneRegulatorActiveSensor(self.device_info)
+        )
 
         # Private
         if config_data[CONFIG_REGULATOR_TYPE] == REGULATOR_TYPE_PID:
@@ -198,6 +201,7 @@ class Zone(ControllerBase):
             result = result and enabler()
 
         self._regulator.enabled = result
+        self.regulator_active_entity.set_is_on(result)
 
     def _climate_enabled(self):
         """Check if the climate entity is enabled for heating."""
@@ -251,6 +255,19 @@ class ZoneSensorFaultSensor(
     def __init__(self, device_info: DeviceInfoModel) -> None:
         """Initialize the sensor fault sensor."""
         super().__init__("Sensor Fault", device_info)
+
+
+class ZoneRegulatorActiveSensor(
+    BinarySensorBase
+):  # pylint: disable=hass-enforce-class-module
+    """Sensor to indicate whether regulator is active."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+
+    def __init__(self, device_info: DeviceInfoModel) -> None:
+        """Initialize the sensor fault sensor."""
+        super().__init__("Regulator Active", device_info)
 
 
 class ZoneClimate(
