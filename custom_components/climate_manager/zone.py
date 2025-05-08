@@ -1,38 +1,22 @@
 """Heating zone."""
 
-import logging
+from collections.abc import Callable
 from datetime import timedelta
-from typing import Any, Awaitable, Callable, cast
+import logging
+from typing import Any, cast
 
-from homeassistant.helpers.entity import Entity
-from .online_tracker import OnlineTracker
-from .window import ZoneWindow
-from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    BinarySensorEntity,
-)
-from homeassistant.components.sensor import (
-    SensorEntity,
-    SensorDeviceClass,
-    SensorStateClass,
-)
-from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate import (
-    HVACMode,
-    PRESET_HOME,
-)
-from homeassistant.components.number import NumberEntity, NumberMode, RestoreNumber
+from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+from homeassistant.components.climate import HVACMode
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.restore_state import RestoreEntity
+
 from .common import (
     BinarySensorBase,
     ClimateBase,
     ControllerBase,
     DeviceInfoModel,
-    HAEntityBase,
-    NumberBase,
     SensorBase,
 )
 from .const import (
@@ -42,9 +26,10 @@ from .const import (
     CONFIG_WINDOW_SENSORS,
     REGULATOR_TYPE_PID,
 )
+from .online_tracker import OnlineTracker
 from .regulator import HysteresisRegulator, PidRegulator, RegulatorBase
-from .retry_tracker import RetryTracker
-from .utils import SimpleAwaiter, get_state_bool, get_state_float
+from .utils import get_state_float
+from .window import ZoneWindow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,6 +40,7 @@ class Zone(ControllerBase):
     _regulator: RegulatorBase
 
     def __init__(self, hass: HomeAssistant, zone_config: ConfigSubentry) -> None:
+        """Initialize the heating zone."""
         super().__init__(hass, zone_config.title)
 
         # Device
@@ -69,7 +55,7 @@ class Zone(ControllerBase):
 
         self._regulator_type = zone_config.data[CONFIG_REGULATOR_TYPE]
         self._temp_sensor = zone_config.data[CONFIG_TEMPERATURE_SENSOR]
-        self._trvs = config_data[CONFIG_TRVS] if CONFIG_TRVS in config_data else []
+        self._trvs = config_data.get(CONFIG_TRVS, [])
         self._window: ZoneWindow | None = (
             ZoneWindow(
                 hass,
@@ -122,21 +108,26 @@ class Zone(ControllerBase):
         )
 
     def initialize(self) -> None:
+        """Initialize the heating zone's regulator."""
         self._regulator.initialize(self.climate_entity.target_temperature)
 
     @property
     def current_temperature(self) -> float | None:
+        """Get the current temperature of the zone."""
         return get_state_float(self._hass, self._temp_sensor)
 
     @property
     def target_temperature(self) -> float | None:
+        """Get the target temperature set for the zone."""
         return self.climate_entity.target_temperature
 
     @property
     def regulator_output(self) -> float:
+        """Get the output value from the regulator."""
         return self._regulator.output
 
     def control_temperature(self) -> None:
+        """Control the temperature of the zone based on current conditions."""
         try:
             cur_temp = self.current_temperature
 
@@ -171,14 +162,14 @@ class Zone(ControllerBase):
         except Exception:
             # Function is called every second, and we don't want to spam the logs
             if not self.control_fault_entity.is_on:
-                _LOGGER.error(
+                _LOGGER.exception(
                     "Exception occured while trying to control heating in zone %s",
                     self._name,
-                    exc_info=True,
                 )
                 self.control_fault_entity.set_is_on(True)
 
     def operate_trvs(self, output: float) -> None:
+        """Operate the TRVs based on the regulator output."""
         mode = "heat" if output > 0 else "off"
         for trv in self._trvs:
             self._hass.services.call(
@@ -201,6 +192,7 @@ class Zone(ControllerBase):
         await self.climate_entity.async_set_preset_mode(value)
 
     def _recalculate_regulator_enabled(self):
+        """Recalculate whether the regulator is enabled based on current conditions."""
         result = True
         for enabler in self._regulator_enablers:
             result = result and enabler()
@@ -208,15 +200,19 @@ class Zone(ControllerBase):
         self._regulator.enabled = result
 
     def _climate_enabled(self):
+        """Check if the climate entity is enabled for heating."""
         return self.climate_entity.hvac_mode == HVACMode.HEAT
 
     def _no_sensor_fault(self):
+        """Check if there is no sensor fault detected."""
         return not self.sensor_fault_entity.is_on
 
     def handle_target_temperature_changed(self, value: float) -> None:
+        """Handle changes in target temperature for the regulator."""
         self._regulator.target_temperature = value
 
     def handle_preset_changed(self, preset: dict[str, Any]):
+        """Handle changes in preset values for the PID regulator."""
         # Climate entity applies its own preset values, we just need to handle other entities
         if isinstance(self._regulator, PidRegulator):
             pid = cast(PidRegulator, self._regulator)
@@ -226,38 +222,49 @@ class Zone(ControllerBase):
                 pid.ki = float(ki)
 
     def _handle_pid_coeffs_changed(self):
+        """Handle changes in PID coefficients for the regulator."""
         pid = cast(PidRegulator, self._regulator)
         self.climate_entity.save_pid_coeffs(pid.kp, pid.ki)
 
 
-class ZoneControlFaultSensor(BinarySensorBase):
+class ZoneControlFaultSensor(BinarySensorBase):  # pylint: disable=hass-enforce-class-module
+    """Sensor to indicate control faults in the zone."""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
-    def __init__(self, device_info: DeviceInfoModel):
+    def __init__(self, device_info: DeviceInfoModel) -> None:
+        """Initialize the control fault sensor."""
         super().__init__("Control Fault", device_info)
 
 
-class ZoneSensorFaultSensor(BinarySensorBase):
+class ZoneSensorFaultSensor(BinarySensorBase):  # pylint: disable=hass-enforce-class-module
+    """Sensor to indicate sensor faults in the zone."""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
-    def __init__(self, device_info: DeviceInfoModel):
+    def __init__(self, device_info: DeviceInfoModel) -> None:
+        """Initialize the sensor fault sensor."""
         super().__init__("Sensor Fault", device_info)
 
 
-class ZoneClimate(ClimateBase, RestoreEntity):
+class ZoneClimate(ClimateBase, RestoreEntity):  # pylint: disable=hass-enforce-class-module
+    """Climate entity for the heating zone."""
+
     _attr_target_temperature = 22
     _attr_min_temp = 18
     _attr_max_temp = 32
 
-    def __init__(self, zone: Zone):
+    def __init__(self, zone: Zone) -> None:
+        """Initialize the climate entity for the zone."""
         super().__init__("Climate", zone.device_info)
         self.zone = zone
 
         self._presets: dict[str, dict[str, Any]] = {}
 
     async def async_added_to_hass(self) -> None:
+        """Initialize the climate entity when added to Home Assistant."""
         await super().async_added_to_hass()
 
         if (last := await self.async_get_last_state()) is None:
@@ -279,16 +286,19 @@ class ZoneClimate(ClimateBase, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
+        """Get extra state attributes for the climate entity."""
         return {
             "presets": self._presets,
         }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        """Set the HVAC mode for the climate entity."""
         self._attr_hvac_mode = hvac_mode
         self._set_preset_item("mode", str(self._attr_hvac_mode))
         self.async_write_ha_state()
 
     async def async_set_temperature(self, **kwargs) -> None:
+        """Set the temperature for the climate entity."""
         if (temp := kwargs.get("temperature")) is not None:
             self._attr_target_temperature = float(temp)
             self._set_preset_item("temperature", self._attr_target_temperature)
@@ -297,6 +307,7 @@ class ZoneClimate(ClimateBase, RestoreEntity):
             self.zone.handle_target_temperature_changed(float(temp))
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set the preset mode for the climate entity."""
         self._attr_preset_mode = preset_mode
         self.async_write_ha_state()
 
@@ -304,17 +315,20 @@ class ZoneClimate(ClimateBase, RestoreEntity):
             self._apply_preset(self._presets[preset_mode])
 
     def save_pid_coeffs(self, kp: float, ki: float):
+        """Save PID coefficients for the preset mode."""
         self._set_preset_item("kp", kp)
         self._set_preset_item("ki", ki)
 
         self.schedule_update_ha_state()
 
     def _set_preset_item(self, key: str, value: Any):
+        """Set a preset item in the preset dictionary."""
         if self.preset_mode not in self._presets:
             self._presets[self.preset_mode] = {}
         self._presets[self.preset_mode][key] = value
 
     def _apply_preset(self, preset: dict[str, Any]):
+        """Apply a preset to the climate entity."""
         if (temp := preset.get("temperature")) is not None:
             self._attr_target_temperature = float(temp)
         if (mode := preset.get("mode")) is not None:
@@ -324,20 +338,25 @@ class ZoneClimate(ClimateBase, RestoreEntity):
         self.zone.handle_preset_changed(preset)
 
 
-class ZoneOutputSensor(SensorBase):
+class ZoneOutputSensor(SensorBase):  # pylint: disable=hass-enforce-class-module
+    """Sensor to indicate the output value of the regulator."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_suggested_display_precision = 4
     _attr_icon = "mdi:gauge"
 
-    def __init__(self, device_info: DeviceInfoModel):
+    def __init__(self, device_info: DeviceInfoModel) -> None:
+        """Initialize the output sensor."""
         super().__init__("Output", device_info)
 
 
-# TODO: Refactor in its own class like Window
-class ZoneTrvSensor(BinarySensorBase):
+# TODO: Refactor in its own class like Window # pylint: disable=fixme
+class ZoneTrvSensor(BinarySensorBase):  # pylint: disable=hass-enforce-class-module
+    """Sensor to indicate TRV status in the zone."""
+
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.HEAT
 
-    def __init__(self, device_info: DeviceInfoModel):
+    def __init__(self, device_info: DeviceInfoModel) -> None:
+        """Initialize the TRV sensor."""
         super().__init__("TRV", device_info)
