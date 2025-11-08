@@ -195,7 +195,7 @@ class HysteresisRegulator(RegulatorBase):
 
         if cur_temp <= self._target - 1:
             self._output = 0.05
-        elif cur_temp >= self._target + 1:
+        elif cur_temp >= self._target:
             self._output = 0
 
     @property
